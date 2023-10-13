@@ -1,6 +1,7 @@
 package com.example.deepbeyond
 
 
+import android.R.attr.src
 import android.content.Context
 import android.content.res.AssetFileDescriptor
 import android.graphics.Bitmap
@@ -36,15 +37,15 @@ import androidx.compose.ui.unit.dp
 import com.example.deepbeyond.ui.theme.DeepBeyondTheme
 import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
+import org.opencv.core.Core
+import org.opencv.core.CvType
 import org.opencv.core.Mat
-import org.opencv.core.Point
+import org.opencv.core.MatOfPoint
 import org.opencv.core.Scalar
+import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import org.tensorflow.lite.Interpreter
-import java.io.BufferedReader
 import java.io.FileInputStream
-import java.io.InputStream
-import java.io.InputStreamReader
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 
@@ -135,8 +136,35 @@ class MainActivity : ComponentActivity() {
         return seg.segment(bitmap)
     }
 
+    // 輪郭抽出関数
+    private fun getContours(bitmap: Bitmap): List<MatOfPoint> {
+        // Bitmap -> Mat
+        val srcMat= Mat()
+        Utils.bitmapToMat(bitmap, srcMat)
+
+        // 輪郭抽出
+        val hierarchy: Mat = Mat.zeros(Size(5.0, 5.0), CvType.CV_8UC1)
+        val contours: List<MatOfPoint> = ArrayList()
+        Imgproc.findContours(
+            srcMat,
+            contours,
+            hierarchy,
+            Imgproc.RETR_EXTERNAL,
+            Imgproc.CHAIN_APPROX_TC89_L1
+        )
+        return contours
+    }
+
     private fun mainProcess(bitmap: Bitmap): Bitmap {
+        // セグメンテーション
         val maskBitmap = segment(bitmap)
+
+        // 輪郭
+        val contours = getContours(maskBitmap)
+
+        // キ甲を探索
+
+        // 胴を探索
 
         return maskBitmap
     }
