@@ -135,6 +135,12 @@ class MainActivity : ComponentActivity() {
         return seg.segment(bitmap)
     }
 
+    private fun mainProcess(bitmap: Bitmap): Bitmap {
+        val maskBitmap = segment(bitmap)
+
+        return maskBitmap
+    }
+
     @Composable
     private fun SelectedButton(context: Context) {
         // 選択された画像のURIを保持
@@ -157,7 +163,7 @@ class MainActivity : ComponentActivity() {
                     var bitmap = uri2bitmap(uri, context)
 
                     // 推論を実行
-                    bitmap = segment(bitmap)
+                    bitmap = mainProcess(bitmap)
 
                     // リサイズ
                     bitmap = resizedBitmap(bitmap)
