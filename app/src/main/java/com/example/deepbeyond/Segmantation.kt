@@ -89,10 +89,10 @@ class Segmantation(
         val segmentBits = Array(OUTPUT_SIZE) { IntArray(OUTPUT_SIZE) }
         val segmentColors = IntArray(NUM_CLASS)
 
-        // 対象物と色を紐づける (馬以外は透明, 馬は黒色)
+        // 対象物と色を紐づける (馬以外は透明, 馬は白色 <- 黒色にするとグレースケール化の時に全て黒になるのを防ぐため, 白色)
         for (i in 0 until NUM_CLASS) {
             when (i) {
-                13 -> segmentColors[i] = Color.BLACK
+                13 -> segmentColors[i] = Color.WHITE
                 else -> segmentColors[i] = Color.TRANSPARENT
             }
         }

@@ -138,16 +138,21 @@ class MainActivity : ComponentActivity() {
         val maskBitmap = segment(bitmap)
 
         // Bitmap -> Mat
-        val srcMat= Mat()
-        Utils.bitmapToMat(bitmap, srcMat)
+        val srcMat= Mat()       // RGBA
+        Utils.bitmapToMat(maskBitmap, srcMat)
 
         // 輪郭
         val contours = getContours(srcMat)
 
-        // 特定の条件を満たす輪郭の座標を取得  vertexAndBbox == contour_vertex, bbox_position
-        val vertexAndBbox = getContourVertex(contours, srcMat)
+        // 特定の条件を満たす輪郭の座標を取得
+        val (contourVertex, bboxPosition) = getContourVertex(contours, srcMat)
 
         // キ甲を探索
+        val (witherPosX, witherPos, lastToesPosX) = getWithersPosition(contourVertex, bboxPosition, srcMat)
+
+//        // Calculate wither_length
+//        val witherLength = witherPos[1].second - witherPos[0].second
+//        println("キ甲の長さ: $witherLength")
 
         // 胴を探索
 
@@ -157,6 +162,7 @@ class MainActivity : ComponentActivity() {
 
         // とも
 
+        srcMat.release()
         return maskBitmap
     }
 
@@ -178,6 +184,10 @@ class MainActivity : ComponentActivity() {
             Canvas(modifier = Modifier.size(DISPLAY_SIZE_DP.dp), onDraw = {
                 if (imageUri == null) {drawRect(color = Color.Gray)}
                 imageUri?.let { uri ->
+
+                    // RGBA画像が表示されているか確認用
+                    drawRect(color = Color.Red)
+
                     // uriをBitmapに変換
                     var bitmap = uri2bitmap(uri, context)
 
