@@ -82,27 +82,62 @@ fun getContourVertex(contours: List<MatOfPoint>, srcMat: Mat): Pair<MutableList<
     return Pair(contourVertex, bboxPosition)
 }
 
-fun getWithersPosition(test:  Pair<MutableList<Pair<Double, Double>>, Rect>
-): Triple<Int, List<Pair<Double, Double>>, Double?> {
-    val bboxX = test.second.x
-    val bboxY = test.second.y
-    val bboxH = test.second.height
-    val bboxW = test.second.width
+fun getIntersection(witherPosX: Int, bboxY: Int, bboxH: Int, srcMat: Mat): List<List<Int>> {
+    // アルファ値を取得
+    val alpha = mutableListOf<Int>()   // アルファ値を格納するリスト
+    for (y in bboxY until bboxY+bboxH) {
+        val alphaValue = srcMat.get(y, witherPosX)[3].toInt()
+        alpha.add(alphaValue)
+    }
 
-    // Define constants
+    // 画像上部における交点
+    val lowY = bboxY + alpha.indexOf(255)
+
+    // 画像下部における交点
+    val reversedAlpha = alpha.reversed()
+    val highY = bboxY + bboxH - reversedAlpha.indexOf(255) + 1
+
+    return listOf(listOf(witherPosX, lowY), listOf(witherPosX, highY))
+}
+
+fun getWithersPosition(vertexAndBbox:  Pair<MutableList<Pair<Double, Double>>, Rect>, srcMat: Mat
+): Triple<Int, List<Pair<Double, Double>>, Double?> {
+    val contourVertex = vertexAndBbox.first
+    val bboxPosition = vertexAndBbox.second
+
+    val bboxX = bboxPosition.x
+    val bboxY = bboxPosition.y
+    val bboxH = bboxPosition.height
+    val bboxW = bboxPosition.width
+
+    //
+    // 1. 探索範囲を設定
+    //
+
+    // 前足を探索するため外接矩形の「上部1/3～上部3/3」「左1/4~左4/4」の範囲を見る
     val onethirdH = bboxH / 3 + bboxY
     val quarterW = bboxW / 4 + bboxX
+
+    // 足先を判定するためのライン（外接矩形の下から0.1のライン）
     val lowerLine = (bboxY + bboxH - bboxH * 0.1).toInt()
 
-    // Initialize variables
+    //
+    // 2. キ甲のx座標を探索
+    //
+
+    // 時刻t-1における辺分の情報
     var prevDistanceY = 0.0
+
+    // 足先のX座標の頂点
     val toesPosXs = mutableListOf<Double>()
     val toesPosYs = mutableListOf<Double>()
 
-    for (i in 0 until test.first.size - 1) {
-        val (x1, y1) = test.first[i]
-        val (x2, y2) = test.first[i + 1]
+    // -1 にしないとfor文最後の実行において終点で配列外参照になる
+    for (i in 0 until contourVertex.size - 1) {
+        val (x1, y1) = contourVertex[i]     // 始点
+        val (x2, y2) = contourVertex[i + 1] // 終点
 
+        // 辺分が上部1/3の位置に属しているなら処理しない
         if (y1 < onethirdH && y2 < onethirdH || x1 < quarterW) {
             continue
         }
@@ -110,19 +145,21 @@ fun getWithersPosition(test:  Pair<MutableList<Pair<Double, Double>>, Rect>
         val distanceX = x2 - x1
         val distanceY = y2 - y1
 
-        // Prevent division by zero
-        val tilt = if (distanceX != 0.0) distanceY.toDouble() / distanceX.toDouble() else 0.0
+        // 0除算対策
+        val tilt = if (distanceX != 0.0) distanceY / distanceX else 0.0
 
+        // 時刻t-1に線分が急激に右肩上がりになり、時刻tで傾きが弱まった場合
         if (prevDistanceY < -bboxH * 2 / 7 && Math.abs(tilt) < 3) {
             break
         }
 
+        // 足先の頂点を探索
         if (y1 > lowerLine) {
             toesPosXs.add(x1)
             toesPosYs.add(y1)
-
         }
 
+        // 時刻tの情報を時刻t-1の情報にする
         prevDistanceY = distanceY
     }
 
@@ -130,11 +167,50 @@ fun getWithersPosition(test:  Pair<MutableList<Pair<Double, Double>>, Rect>
         throw IllegalArgumentException("Can't look for toes vertex")
     }
 
+    // キ甲のX座標：前足の頂点らの中点
     val witherPosX = toesPosXs.average().toInt()
+
+    // 前足の頂点らの最も右端の点
     val lastToesPosX = toesPosXs.maxOrNull()
 
+    //
+    // 3. キ甲の長さを探索(キ甲と輪郭の交点を探索
+    //
 
-    // More code for the intersection and other parts can be added here.
+    // アルファ値を取得
+    val alpha = mutableListOf<Int>()   // アルファ値を格納するリスト
+    for (y in bboxY until bboxY+bboxH) {
+        val alphaValue = srcMat.get(y, witherPosX)[3].toInt()
+        alpha.add(alphaValue)
+    }
+
+    // 画像上部における交点
+    val lowY = bboxY + alpha.indexOf(255)
+
+    // 画像下部における交点
+    val reversedAlpha = alpha.reversed()
+    val highY = bboxY + bboxH - reversedAlpha.indexOf(255) + 1
+
+    val witherPos = listOf(listOf(witherPosX, lowY), listOf(witherPosX, highY))
+//    val witherPos = getIntersection(witherPosX, bboxY, bboxH, srcMat)
+
+    //
+    // 4. キ甲と輪郭の交点を修正
+    //
+
+    // 足先に線分の頂点が位置していない場合、足先の座標に変更
+    // 2点の中でY座標が大きい方の頂点がtoesYよりも小さければ変更
+//    val toesPosY = toesPosYs.sum() / toesPosYs.size
+
+//    if (witherPos[0][1] > witherPos[1][1]) {
+//        if (witherPos[0][1] < toesPosY) {
+//            witherPos[0][1] = toesPosY
+//        }
+//    } else {
+//        if (witherPos[1][1] < toesPosY) {
+//            witherPos[1][1] = toesPosY
+//        }
+//    }
 
     return Triple(witherPosX, emptyList(), lastToesPosX)
 }

@@ -138,8 +138,8 @@ class MainActivity : ComponentActivity() {
         val maskBitmap = segment(bitmap)
 
         // Bitmap -> Mat
-        val srcMat= Mat()
-        Utils.bitmapToMat(bitmap, srcMat)
+        val srcMat= Mat()       // RGBA
+        Utils.bitmapToMat(maskBitmap, srcMat)
 
         // 輪郭
         val contours = getContours(srcMat)
@@ -148,12 +148,11 @@ class MainActivity : ComponentActivity() {
         val vertexAndBbox = getContourVertex(contours, srcMat)
 
         // キ甲を探索
-        // Call the getWithersPosition function to get wither_pos_x, wither_pos, and last_toes_pos_x
-        val (witherPosX, witherPos, lastToesPosX) = getWithersPosition(vertexAndBbox)
+//        val (witherPosX, witherPos, lastToesPosX) = getWithersPosition(vertexAndBbox, srcMat)
 
-        // Calculate wither_length
-        val witherLength = witherPos[1].second - witherPos[0].second
-        println("キ甲の長さ: $witherLength")
+//        // Calculate wither_length
+//        val witherLength = witherPos[1].second - witherPos[0].second
+//        println("キ甲の長さ: $witherLength")
 
         // 胴を探索
 
