@@ -1,7 +1,5 @@
 package com.example.deepbeyond
 
-
-import android.R.attr.src
 import android.content.Context
 import android.content.res.AssetFileDescriptor
 import android.graphics.Bitmap
@@ -41,7 +39,6 @@ import org.opencv.core.Core
 import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.MatOfPoint
-import org.opencv.core.Scalar
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import org.tensorflow.lite.Interpreter
@@ -136,35 +133,29 @@ class MainActivity : ComponentActivity() {
         return seg.segment(bitmap)
     }
 
-    // 輪郭抽出関数
-    private fun getContours(bitmap: Bitmap): List<MatOfPoint> {
-        // Bitmap -> Mat
-        val srcMat= Mat()
-        Utils.bitmapToMat(bitmap, srcMat)
-
-        // 輪郭抽出
-        val hierarchy: Mat = Mat.zeros(Size(5.0, 5.0), CvType.CV_8UC1)
-        val contours: List<MatOfPoint> = ArrayList()
-        Imgproc.findContours(
-            srcMat,
-            contours,
-            hierarchy,
-            Imgproc.RETR_EXTERNAL,
-            Imgproc.CHAIN_APPROX_TC89_L1
-        )
-        return contours
-    }
-
     private fun mainProcess(bitmap: Bitmap): Bitmap {
         // セグメンテーション
         val maskBitmap = segment(bitmap)
 
+        // Bitmap -> Mat
+        val srcMat= Mat()
+        Utils.bitmapToMat(bitmap, srcMat)
+
         // 輪郭
-        val contours = getContours(maskBitmap)
+        val contours = getContours(srcMat)
+
+        // 特定の条件を満たす輪郭の座標を取得  vertexAndBbox == contour_vertex, bbox_position
+        val vertexAndBbox = getContourVertex(contours, srcMat)
 
         // キ甲を探索
 
         // 胴を探索
+
+        // 首
+
+        // 繋
+
+        // とも
 
         return maskBitmap
     }
