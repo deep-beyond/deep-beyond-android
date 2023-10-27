@@ -215,9 +215,12 @@ fun getWithersPosition(vertexAndBbox:  Pair<MutableList<Pair<Double, Double>>, R
     return Triple(witherPosX, emptyList(), lastToesPosX)
 }
 
-fun getTorso(contour: ,bboxPotion:, witherPosX:, descimg:, args:): {
-    val bboxY = bboxPotion[1]
-    val bboxH = bboxPotion[2]
+fun getTorso(vertexAndBbox:  Pair<MutableList<Pair<Double, Double>>, Rect>, witherPosX: Int): Int {
+    val contour = vertexAndBbox.first
+    val bboxPosition = vertexAndBbox.second
+
+    val bboxY = bboxPosition.y
+    val bboxH = bboxPosition.height
 
     //
     //1.探索範囲を設定
