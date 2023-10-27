@@ -214,3 +214,64 @@ fun getWithersPosition(vertexAndBbox:  Pair<MutableList<Pair<Double, Double>>, R
 
     return Triple(witherPosX, emptyList(), lastToesPosX)
 }
+
+fun getTorso(contour: ,bboxPotion:, witherPosX:, descimg:, args:): {
+    val bboxY = bboxPotion[1]
+    val bboxH = bboxPotion[2]
+
+    //
+    //1.探索範囲を設定
+    //
+
+    //胴の終点を探索するため外接矩形の「キ甲より右側（尻側）」「上側1/3」の範囲を見る
+    val onethirdH = bboxH / 3 + bboxY
+
+    //
+    //2.胴のx座標を探索
+    //
+
+    //時系列t-1における傾きとx座標の情報
+    var prevTilt = 0
+    var prevX = 0
+
+    //胴のx座標の頂点
+    var torsoPosX = 0
+
+    //胴の終点であるフラグ
+    var torsoFIg = false
+
+    for(i in contour.indices){
+        val (x1, y1) = contour[i]  // 始点
+
+        // 配列外参照にならないようにループさせる
+        val (x2, y2) = if (i == contour.size - 1) {
+            contour[0]  // 終点
+        } else {
+            contour[i + 1]  // 終点
+        }
+
+        //「キ甲より右側（尻側）」「上側1/3」の範囲以外ならば処理しない
+        if (x1 < witherPosX || y1 > onethirdH) {
+            continue
+        }
+
+        val distanceX = x2 - x1
+        val distanceY = y2 - y1
+        val tilt = (distanceY.toDouble() / distanceX.toDouble()).round(1)
+
+        //傾きが正->負->正になった場合、負の箇所を胴の終点とする
+        if (torsoFIg == true && tilt<0) {
+            torsoPosX = prevX
+            break
+        }
+
+        if (tilt <= 0 && prevTilt > 0 ){
+            torsoFlg = true
+        }
+
+        prevTilt = tilt
+        prevX = x1
+    }
+
+    return torsePosX
+}
