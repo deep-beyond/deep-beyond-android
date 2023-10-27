@@ -148,6 +148,12 @@ class MainActivity : ComponentActivity() {
         val vertexAndBbox = getContourVertex(contours, srcMat)
 
         // キ甲を探索
+        // Call the getWithersPosition function to get wither_pos_x, wither_pos, and last_toes_pos_x
+        val (witherPosX, witherPos, lastToesPosX) = getWithersPosition(vertexAndBbox)
+
+        // Calculate wither_length
+        val witherLength = witherPos[1].second - witherPos[0].second
+        println("キ甲の長さ: $witherLength")
 
         // 胴を探索
 

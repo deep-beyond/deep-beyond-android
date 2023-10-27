@@ -81,3 +81,60 @@ fun getContourVertex(contours: List<MatOfPoint>, srcMat: Mat): Pair<MutableList<
     val bboxPosition = Rect(conditionBboxX, conditionBboxY, conditionBboxW, conditionBboxH)
     return Pair(contourVertex, bboxPosition)
 }
+
+fun getWithersPosition(test:  Pair<MutableList<Pair<Double, Double>>, Rect>
+): Triple<Int, List<Pair<Double, Double>>, Double?> {
+    val bboxX = test.second.x
+    val bboxY = test.second.y
+    val bboxH = test.second.height
+    val bboxW = test.second.width
+
+    // Define constants
+    val onethirdH = bboxH / 3 + bboxY
+    val quarterW = bboxW / 4 + bboxX
+    val lowerLine = (bboxY + bboxH - bboxH * 0.1).toInt()
+
+    // Initialize variables
+    var prevDistanceY = 0.0
+    val toesPosXs = mutableListOf<Double>()
+    val toesPosYs = mutableListOf<Double>()
+
+    for (i in 0 until test.first.size - 1) {
+        val (x1, y1) = test.first[i]
+        val (x2, y2) = test.first[i + 1]
+
+        if (y1 < onethirdH && y2 < onethirdH || x1 < quarterW) {
+            continue
+        }
+
+        val distanceX = x2 - x1
+        val distanceY = y2 - y1
+
+        // Prevent division by zero
+        val tilt = if (distanceX != 0.0) distanceY.toDouble() / distanceX.toDouble() else 0.0
+
+        if (prevDistanceY < -bboxH * 2 / 7 && Math.abs(tilt) < 3) {
+            break
+        }
+
+        if (y1 > lowerLine) {
+            toesPosXs.add(x1)
+            toesPosYs.add(y1)
+
+        }
+
+        prevDistanceY = distanceY
+    }
+
+    if (toesPosXs.isEmpty()) {
+        throw IllegalArgumentException("Can't look for toes vertex")
+    }
+
+    val witherPosX = toesPosXs.average().toInt()
+    val lastToesPosX = toesPosXs.maxOrNull()
+
+
+    // More code for the intersection and other parts can be added here.
+
+    return Triple(witherPosX, emptyList(), lastToesPosX)
+}
