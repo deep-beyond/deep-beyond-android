@@ -147,12 +147,11 @@ class MainActivity : ComponentActivity() {
 
         // 特定の条件を満たす輪郭の座標を取得
         val (contourVertex, bboxPosition) = getContourVertex(contours, srcMat)
-        // {105, 32, 854x742}
-        // 28
+
         // キ甲を探索
         val (witherPosX, witherPos, lastToesPosX) = getWithersPosition(contourVertex, bboxPosition, srcMat)
         val witherLength = witherPos[1][1] - witherPos[0][1]
-        Log.d("HorseInfo", "キ甲の長さ：$witherLength")   //  キ甲の長さ：585
+        Log.d("HorseInfo", "キ甲の長さ：$witherLength")
 
         // 胴を探索
         val torsoPosX = getTorso(contourVertex, bboxPosition, witherPosX)
@@ -160,10 +159,14 @@ class MainActivity : ComponentActivity() {
         Log.d("HorseInfo", "胴の長さ: $torsoLength")
 
         // 首
+        val neckLength = getNeck(contourVertex, witherPos)
+        Log.d("HorseInfo", "首の長さ: $neckLength")
 
         // 繋   不要かもしれない
 
         // とも
+        val hindlimbLength = getHindlimb(torsoPosX, bboxPosition, contourVertex, lastToesPosX, srcMat)
+        Log.d("HorseInfo", "ともの長さ: $hindlimbLength")
 
         srcMat.release()
         return maskBitmap

@@ -11,6 +11,7 @@ import org.opencv.core.Point
 import org.opencv.core.Rect
 import org.opencv.core.Scalar
 import org.opencv.core.Size
+import org.opencv.core.Core
 import org.opencv.imgproc.Imgproc
 
 // 輪郭抽出関数
@@ -38,7 +39,8 @@ fun getContours(srcMat: Mat): List<MatOfPoint> {
 }
 
 // 輪郭情報から近似輪郭の座標を得る
-fun getContourVertex(contours: List<MatOfPoint>, srcMat: Mat): Pair<MutableList<Pair<Double, Double>>, Rect> {
+fun getContourVertex(contours: List<MatOfPoint>, srcMat: Mat):
+        Pair<MutableList<Pair<Double, Double>>, Rect> {
     // 輪郭の座標リスト
     val contourVertex = mutableListOf<Pair<Double, Double>>()
 
@@ -113,7 +115,8 @@ fun getIntersection(witherPosX: Int, bboxY: Int, bboxH: Int, srcMat: Mat): Array
 }
 
 // キ甲の座標情報を取得
-fun getWithersPosition(contourVertex:MutableList<Pair<Double, Double>>, bboxPosition:Rect, srcMat: Mat)
+fun getWithersPosition(contourVertex:MutableList<Pair<Double, Double>>,
+                       bboxPosition:Rect, srcMat: Mat)
 : Triple<Int, Array<Array<Int>>, Int> {
 
     val bboxX = bboxPosition.x
@@ -213,7 +216,8 @@ fun getWithersPosition(contourVertex:MutableList<Pair<Double, Double>>, bboxPosi
 }
 
 // 胴を探索
-fun getTorso(contourVertex:MutableList<Pair<Double, Double>>, bboxPosition:Rect, witherPosX: Int): Int {
+fun getTorso(contourVertex:MutableList<Pair<Double, Double>>,
+             bboxPosition:Rect, witherPosX: Int): Int {
     val bboxY = bboxPosition.y
     val bboxH = bboxPosition.height
 
@@ -279,4 +283,191 @@ fun getTorso(contourVertex:MutableList<Pair<Double, Double>>, bboxPosition:Rect,
     }
 
     return torsoPosX
+}
+
+// 首を探索
+fun getNeck(contourVertex:MutableList<Pair<Double, Double>>, witherPos: Array<Array<Int>>): Double {
+    // yの値が最も小さい頂点を始点とする
+    val sortedContour = contourVertex.sortedBy { it.second }
+    val start = sortedContour[0]
+    val end = Pair(witherPos[0][0].toDouble(), witherPos[0][1].toDouble())
+
+    val deltaX = Math.abs(end.first - start.first)
+    val deltaY = Math.abs(end.second - start.second)
+    val neckLength = Math.sqrt((deltaX * deltaX + deltaY * deltaY))
+
+    return (Math.round(neckLength * 10.0)).toDouble() / 10.0    // 小数点第1位
+}
+
+// 尻のx座標を探索
+fun getHip(torsoPosX: Int, bboxPosition: Rect, img: Mat): Int {
+    //
+    // 1. 探索範囲を設定
+    //
+    val bboxY = bboxPosition.y
+    val bboxH = bboxPosition.height
+    val bboxW = bboxPosition.width
+
+    // 画像の尻部分のみ着目
+    val baseImg = Mat(img, Rect(torsoPosX, bboxY, bboxW, bboxH / 2))
+    val h = baseImg.rows()
+    val w = baseImg.cols()
+
+    //
+    // 2. 尻の先端のx座標を探索
+    //
+    val hipPosLog = mutableListOf<Int>()
+
+    // 画像の大きさによってノイズ除去の度合を変更
+    val ksize: Int
+    if (img.cols() < 150) {
+        ksize = 3
+    } else {
+        ksize = 5
+    }
+
+    //
+    //  以下, 非修正
+    //
+
+    for (itr in 1..3) {
+        for (alpha in listOf(1.5, 2.5, 4.5)) {
+            val adjustedImg = Mat()
+            Core.convertScaleAbs(baseImg, adjustedImg, alpha = alpha)
+            Imgproc.cvtColor(adjustedImg, adjustedImg, Imgproc.COLOR_BGR2GRAY)
+
+            val contours = mutableListOf<MatOfPoint>()
+            val hierarchy = Mat()
+            Imgproc.findContours(adjustedImg, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+
+            val adaptiveThresholdImg = Mat()
+            Imgproc.adaptiveThreshold(adjustedImg, adaptiveThresholdImg, 255.0, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY, 13, 20.0)
+
+            val lsdImg = Mat.zeros(adaptiveThresholdImg.size(), CvType.CV_8UC1)
+            for (line in Photo.createLineSegmentDetector().detect(adaptiveThresholdImg)) {
+                val x1 = line[0].toInt()
+                val y1 = line[1].toInt()
+                val x2 = line[2].toInt()
+                val y2 = line[3].toInt()
+                Imgproc.line(lsdImg, Point(x1.toDouble(), y1.toDouble()), Point(x2.toDouble(), y2.toDouble()), Scalar(255.0), 1)
+            }
+            Core.bitwise_not(lsdImg, lsdImg)
+
+            Core.bitwise_not(lsdImg, lsdImg)
+            val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(3.0, 3.0))
+            Core.dilate(lsdImg, lsdImg, kernel, Point(-1.0, -1.0), itr)
+            Core.bitwise_not(lsdImg, lsdImg)
+
+            var bottomRightXPos = 0
+            for (x in w - 1 downTo 0) {
+                if (lsdImg[h - 1, x][0] <= 0.0) {
+                    bottomRightXPos = x
+                    break
+                }
+            }
+
+            val contour = MatOfPoint()
+            var drawFlag = false
+            for (point in contours[0].toList()) {
+                val x = point.x.toInt()
+                val y = point.y.toInt()
+                if (bottomRightXPos - x < 10) {
+                    drawFlag = true
+                }
+                if (drawFlag) {
+                    contour.push_back(MatOfPoint(Point(x.toDouble(), y.toDouble())))
+                }
+            }
+
+            for (i in 0 until contour.size() - 1) {
+                val x1 = contour[i].get(0, 0)[0].toInt()
+                val y1 = contour[i].get(0, 0)[1].toInt()
+                val x2 = contour[i + 1].get(0, 0)[0].toInt()
+                val y2 = contour[i + 1].get(0, 0)[1].toInt()
+            }
+
+            for (j in 0 until 4) {
+                Imgproc.medianBlur(adjustedImg, adjustedImg, ksize)
+            }
+
+            val candPosXS = mutableListOf<Int>()
+            var prevX: Int? = null
+            var endFlag = false
+            var length = 0
+
+            for (y in h - 1 downTo h / 2) {
+                if (endFlag) {
+                    break
+                }
+                for (x in 0 until w - 10) {
+                    if (adjustedImg[y, x][0] <= 0.0) {
+                        if (prevX != null) {
+                            if (0 <= prevX - x && prevX - x < 5) {
+                                length++
+                            } else if (prevX - x > 10) {
+                                continue
+                            } else {
+                                length = 0
+                            }
+                        }
+                        if (length > 10) {
+                            candPosXS.add(x)
+                        }
+                        prevX = x
+                        if (length > 10) {
+                            endFlag = true
+                            break
+                        }
+                    }
+                }
+            }
+
+            if (candPosXS.isNotEmpty()) {
+                hipPosLog.add(candPosXS.maxOrNull()!!)
+            }
+        }
+        if (hipPosLog.isNotEmpty()) {
+            break
+        }
+    }
+
+    var hipPosX = hipPosLog.maxOrNull() ?: 0
+    hipPosX += torsoPosX
+
+    return hipPosX
+}
+
+// ともを探索
+fun getHindlimb(torsoPosX: Int, bboxPosition:Rect,
+                contourVertex:MutableList<Pair<Double, Double>>, lastTpesPosX: Int, img: Mat): Int {
+    // 尻のx座標を探索
+    val hipPosX = getHip(torsoPosX, bboxPosition, img)
+
+    // ともの始点を探索
+    var limitCnt = 0
+    var hindlimbPosX = 0
+    var hindlimbPosY = Double.POSITIVE_INFINITY
+
+    for (i in 0 until contourVertex.size - 1) {
+        val (x1, y1) = contourVertex[i]  // 始点
+
+        // 始点が外接矩形の左半分ならばスキップ
+        if (x1 < lastTpesPosX) {
+            continue
+        }
+
+        // 条件を満たす7頂点を見れば処理終了
+        if (limitCnt > 7) {
+            break
+        }
+
+        limitCnt++
+        // 条件を満たす7点の中でy座標が最小の点がともの始点
+        if (y1 < hindlimbPosY) {
+            hindlimbPosY = y1
+            hindlimbPosX = x1.toInt()
+        }
+    }
+
+    return hipPosX - hindlimbPosX
 }
