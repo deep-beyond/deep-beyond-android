@@ -1,6 +1,7 @@
 package com.example.deepbeyond
 
 import android.graphics.Bitmap
+import android.util.Log
 import org.opencv.android.Utils
 import org.opencv.core.CvType
 import org.opencv.core.Mat
@@ -17,6 +18,9 @@ fun getContours(srcMat: Mat): List<MatOfPoint> {
     // グレースケール化
     val grayMat = Mat()
     Imgproc.cvtColor(srcMat, grayMat, Imgproc.COLOR_BGRA2GRAY)
+
+    // ノイズ除去
+    Imgproc.medianBlur(grayMat, grayMat, 7)
 
     // 輪郭抽出
     val hierarchy: Mat = Mat.zeros(Size(5.0, 5.0), CvType.CV_8UC1)
@@ -103,7 +107,7 @@ fun getIntersection(witherPosX: Int, bboxY: Int, bboxH: Int, srcMat: Mat): Array
 
     // 画像下部における交点
     val reversedAlpha = alpha.reversed()
-    val highY = bboxY + bboxH - reversedAlpha.indexOf(255) + 1
+    val highY = bboxY + bboxH - reversedAlpha.indexOf(255) + 1      // 455, 175    455, 645
 
     return arrayOf(arrayOf(witherPosX, lowY), arrayOf(witherPosX, highY))
 }
@@ -208,68 +212,71 @@ fun getWithersPosition(contourVertex:MutableList<Pair<Double, Double>>, bboxPosi
     return Triple(witherPosX, witherPos, lastToesPosX)
 }
 
+// 胴を探索
+fun getTorso(contourVertex:MutableList<Pair<Double, Double>>, bboxPosition:Rect, witherPosX: Int): Int {
+    val bboxY = bboxPosition.y
+    val bboxH = bboxPosition.height
 
-//
-//fun getTorso(vertexAndBbox:  Pair<MutableList<Pair<Double, Double>>, Rect>, witherPosX: Int): Int {
-//    val contour = vertexAndBbox.first
-//    val bboxPosition = vertexAndBbox.second
-//
-//    val bboxY = bboxPosition.y
-//    val bboxH = bboxPosition.height
-//
-//    //
-//    //1.探索範囲を設定
-//    //
-//
-//    //胴の終点を探索するため外接矩形の「キ甲より右側（尻側）」「上側1/3」の範囲を見る
-//    val onethirdH = bboxH / 3 + bboxY
-//
-//    //
-//    //2.胴のx座標を探索
-//    //
-//
-//    //時系列t-1における傾きとx座標の情報
-//    var prevTilt = 0
-//    var prevX = 0
-//
-//    //胴のx座標の頂点
-//    var torsoPosX = 0
-//
-//    //胴の終点であるフラグ
-//    var torsoFIg = false
-//
-//    for(i in contour.indices){
-//        val (x1, y1) = contour[i]  // 始点
-//
-//        // 配列外参照にならないようにループさせる
-//        val (x2, y2) = if (i == contour.size - 1) {
-//            contour[0]  // 終点
-//        } else {
-//            contour[i + 1]  // 終点
-//        }
-//
-//        //「キ甲より右側（尻側）」「上側1/3」の範囲以外ならば処理しない
-//        if (x1 < witherPosX || y1 > onethirdH) {
-//            continue
-//        }
-//
-//        val distanceX = x2 - x1
-//        val distanceY = y2 - y1
-//        val tilt = (distanceY.toDouble() / distanceX.toDouble()).round(1)
-//
-//        //傾きが正->負->正になった場合、負の箇所を胴の終点とする
-//        if (torsoFIg == true && tilt<0) {
-//            torsoPosX = prevX
-//            break
-//        }
-//
-//        if (tilt <= 0 && prevTilt > 0 ){
-//            torsoFlg = true
-//        }
-//
-//        prevTilt = tilt
-//        prevX = x1
-//    }
-//
-//    return torsePosX
-//}
+    //
+    //1.探索範囲を設定
+    //
+
+    //胴の終点を探索するため外接矩形の「キ甲より右側（尻側）」「上側1/3」の範囲を見る
+    val onethirdH = bboxH / 3 + bboxY       // 279
+
+    //
+    //2.胴のx座標を探索
+    //
+
+    //時系列t-1における傾きとx座標の情報
+    var prevTilt = 0.0
+    var prevX = 0
+
+    //胴のx座標の頂点
+    var torsoPosX = 0
+
+    //胴の終点であるフラグ
+    var torsoFlg = false
+
+    for(i in contourVertex.indices){
+        val (x1, y1) = contourVertex[i]  // 始点
+
+        // 配列外参照にならないようにループさせる
+        val (x2, y2) = if (i == contourVertex.size - 1) {
+            contourVertex[0]  // 終点
+        } else {
+            contourVertex[i + 1]  // 終点
+        }
+
+        //「キ甲より右側（尻側）」「上側1/3」の範囲以外ならば処理しない
+        if (x1 < witherPosX || y1 > onethirdH) {
+            continue
+        }
+
+        var distanceX = x2 - x1
+        val distanceY = y2 - y1
+
+        // 0除算対策
+        if (distanceX == 0.0){
+            distanceX += 0.00001
+        }
+
+        val tilt: Double = Math.round(distanceY / distanceX * 10.0) / 10.0  // 小数点第1位
+        Log.d("HorseInfo", "傾き：$tilt")
+
+        //傾きが正->負->正になった場合、負の箇所を胴の終点とする
+        if (torsoFlg && tilt > 0.0) {
+            torsoPosX = prevX
+            break
+        }
+
+        if (tilt <= 0.0 && prevTilt != 0.0 ){
+            torsoFlg = true
+        }
+
+        prevTilt = tilt
+        prevX = x1.toInt()
+    }
+
+    return torsoPosX
+}

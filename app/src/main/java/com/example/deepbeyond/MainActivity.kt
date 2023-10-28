@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -146,19 +147,21 @@ class MainActivity : ComponentActivity() {
 
         // 特定の条件を満たす輪郭の座標を取得
         val (contourVertex, bboxPosition) = getContourVertex(contours, srcMat)
-
+        // {105, 32, 854x742}
+        // 28
         // キ甲を探索
         val (witherPosX, witherPos, lastToesPosX) = getWithersPosition(contourVertex, bboxPosition, srcMat)
-
-//        // Calculate wither_length
-//        val witherLength = witherPos[1].second - witherPos[0].second
-//        println("キ甲の長さ: $witherLength")
+        val witherLength = witherPos[1][1] - witherPos[0][1]
+        Log.d("HorseInfo", "キ甲の長さ：$witherLength")   //  キ甲の長さ：585
 
         // 胴を探索
+        val torsoPosX = getTorso(contourVertex, bboxPosition, witherPosX)
+        val torsoLength = torsoPosX - witherPos[0][0]
+        Log.d("HorseInfo", "胴の長さ: $torsoLength")
 
         // 首
 
-        // 繋
+        // 繋   不要かもしれない
 
         // とも
 
