@@ -333,29 +333,39 @@ fun getHip(torsoPosX: Int, bboxPosition: Rect, img: Mat): Int {
     for (itr in 1..3) {
         for (alpha in listOf(1.5, 2.5, 4.5)) {
             val adjustedImg = Mat()
-            Core.convertScaleAbs(baseImg, adjustedImg, alpha = alpha)
+            Core.convertScaleAbs(baseImg, adjustedImg, alpha)
             Imgproc.cvtColor(adjustedImg, adjustedImg, Imgproc.COLOR_BGR2GRAY)
 
             val contours = mutableListOf<MatOfPoint>()
             val hierarchy = Mat()
             Imgproc.findContours(adjustedImg, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
 
+            // 二値化
             val adaptiveThresholdImg = Mat()
             Imgproc.adaptiveThreshold(adjustedImg, adaptiveThresholdImg, 255.0, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY, 13, 20.0)
 
+            // lsdのための画像作成
             val lsdImg = Mat.zeros(adaptiveThresholdImg.size(), CvType.CV_8UC1)
-            for (line in Photo.createLineSegmentDetector().detect(adaptiveThresholdImg)) {
-                val x1 = line[0].toInt()
-                val y1 = line[1].toInt()
-                val x2 = line[2].toInt()
-                val y2 = line[3].toInt()
-                Imgproc.line(lsdImg, Point(x1.toDouble(), y1.toDouble()), Point(x2.toDouble(), y2.toDouble()), Scalar(255.0), 1)
-            }
+
+            val tmp = Mat()
+
+            Imgproc.createLineSegmentDetector().detect(adaptiveThresholdImg, tmp)
+
+
+//            for (line in Imgproc.createLineSegmentDetector().detect(adaptiveThresholdImg)) {
+//                val x1 = line[0].toInt()
+//                val y1 = line[1].toInt()
+//                val x2 = line[2].toInt()
+//                val y2 = line[3].toInt()
+//                Imgproc.line(lsdImg, Point(x1.toDouble(), y1.toDouble()), Point(x2.toDouble(), y2.toDouble()), Scalar(255.0), 1)
+//            }
+
+
             Core.bitwise_not(lsdImg, lsdImg)
 
             Core.bitwise_not(lsdImg, lsdImg)
             val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(3.0, 3.0))
-            Core.dilate(lsdImg, lsdImg, kernel, Point(-1.0, -1.0), itr)
+            Imgproc.dilate(lsdImg, lsdImg, kernel, Point(-1.0, -1.0), itr)
             Core.bitwise_not(lsdImg, lsdImg)
 
             var bottomRightXPos = 0
@@ -380,10 +390,11 @@ fun getHip(torsoPosX: Int, bboxPosition: Rect, img: Mat): Int {
             }
 
             for (i in 0 until contour.size() - 1) {
-                val x1 = contour[i].get(0, 0)[0].toInt()
-                val y1 = contour[i].get(0, 0)[1].toInt()
-                val x2 = contour[i + 1].get(0, 0)[0].toInt()
-                val y2 = contour[i + 1].get(0, 0)[1].toInt()
+                val x1 = contours[i].get(0,0)[0]
+                val y1 = contours[i].get(0,0)[1]
+                val x2 = contours[i + 1].get(0,0)[0]
+                val y2 = contours[i + 1].get(0,0)[1]
+
             }
 
             for (j in 0 until 4) {
