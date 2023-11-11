@@ -11,19 +11,32 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -34,6 +47,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import com.example.deepbeyond.ui.theme.DeepBeyondTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
 import org.opencv.core.Core
@@ -134,7 +149,7 @@ class MainActivity : ComponentActivity() {
         return seg.segment(bitmap)
     }
 
-    private fun mainProcess(bitmap: Bitmap): Bitmap {
+    private fun mainProcess(bitmap: Bitmap): Array<Double> {
         // セグメンテーション
         val maskBitmap = segment(bitmap)
 
@@ -150,12 +165,12 @@ class MainActivity : ComponentActivity() {
 
         // キ甲を探索
         val (witherPosX, witherPos, lastToesPosX) = getWithersPosition(contourVertex, bboxPosition, srcMat)
-        val witherLength = witherPos[1][1] - witherPos[0][1]
+        val witherLength = witherPos[1][1] - witherPos[0][1].toDouble()
         Log.d("HorseInfo", "キ甲の長さ：$witherLength")
 
         // 胴を探索
         val torsoPosX = getTorso(contourVertex, bboxPosition, witherPosX)
-        val torsoLength = torsoPosX - witherPos[0][0]
+        val torsoLength = torsoPosX - witherPos[0][0].toDouble()
         Log.d("HorseInfo", "胴の長さ: $torsoLength")
 
         // 首
@@ -165,11 +180,12 @@ class MainActivity : ComponentActivity() {
         // 繋   不要かもしれない
 
         // とも
-        val hindlimbLength = getHindlimb(torsoPosX, bboxPosition, contourVertex, lastToesPosX, srcMat)
-        Log.d("HorseInfo", "ともの長さ: $hindlimbLength")
+//        val hindlimbLength = getHindlimb(torsoPosX, bboxPosition, contourVertex, lastToesPosX, srcMat)
+//        Log.d("HorseInfo", "ともの長さ: $hindlimbLength")
 
         srcMat.release()
-        return maskBitmap
+
+        return arrayOf(witherLength, torsoLength, neckLength)
     }
 
     @Composable
@@ -177,9 +193,36 @@ class MainActivity : ComponentActivity() {
         // 選択された画像のURIを保持
         var imageUri by remember { mutableStateOf<Uri?>(null) }
 
+        // 馬情報
+        var witherLength by remember { mutableStateOf(0.0) }
+        var torsoLength by remember { mutableStateOf(0.0) }
+        var neckLength by remember { mutableStateOf(0.0) }
+
         // ギャラリーから画像を選択するためのアクティビティ結果コントラクトを宣言
         val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
             imageUri = uri
+        }
+
+        // 非同期処理の結果をUIに反映する
+        LaunchedEffect(imageUri) {
+            imageUri?.let { uri ->
+                // uriをBitmapに変換
+                var bitmap = uri2bitmap(uri, context)
+                // リサイズ
+                bitmap = resizedBitmap(bitmap)
+
+                // 推論を実行
+                val output = withContext(Dispatchers.Default) {
+                    mainProcess(bitmap)
+                }
+
+                // 情報を更新
+                withContext(Dispatchers.Main) {
+                    witherLength = output[0]
+                    torsoLength = output[1]
+                    neckLength = output[2]
+                }
+            }
         }
 
         Column(
@@ -190,16 +233,11 @@ class MainActivity : ComponentActivity() {
             Canvas(modifier = Modifier.size(DISPLAY_SIZE_DP.dp), onDraw = {
                 if (imageUri == null) {drawRect(color = Color.Gray)}
                 imageUri?.let { uri ->
-
                     // RGBA画像が表示されているか確認用
-                    drawRect(color = Color.Red)
+                    // drawRect(color = Color.Red)
 
                     // uriをBitmapに変換
                     var bitmap = uri2bitmap(uri, context)
-
-                    // 推論を実行
-                    bitmap = mainProcess(bitmap)
-
                     // リサイズ
                     bitmap = resizedBitmap(bitmap)
 
@@ -217,6 +255,9 @@ class MainActivity : ComponentActivity() {
             ){
                 Text(text = "SELECT IMAGE")
             }
+            Text("キ甲： $witherLength")
+            Text("胴： $torsoLength")
+            Text("首： $neckLength")
         }
     }
 }

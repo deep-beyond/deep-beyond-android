@@ -389,13 +389,13 @@ fun getHip(torsoPosX: Int, bboxPosition: Rect, img: Mat): Int {
                 }
             }
 
-            for (i in 0 until contour.size() - 1) {
-                val x1 = contours[i].get(0,0)[0]
-                val y1 = contours[i].get(0,0)[1]
-                val x2 = contours[i + 1].get(0,0)[0]
-                val y2 = contours[i + 1].get(0,0)[1]
-
-            }
+//            for (i in 0 until contour.size() - 1) {
+//                val x1 = contours[i].get(0,0)[0]
+//                val y1 = contours[i].get(0,0)[1]
+//                val x2 = contours[i + 1].get(0,0)[0]
+//                val y2 = contours[i + 1].get(0,0)[1]
+//
+//            }
 
             for (j in 0 until 4) {
                 Imgproc.medianBlur(adjustedImg, adjustedImg, ksize)
