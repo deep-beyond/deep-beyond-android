@@ -56,6 +56,7 @@ import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.MatOfPoint
 import org.opencv.core.Size
+import org.opencv.dnn.SegmentationModel
 import org.opencv.imgproc.Imgproc
 import org.tensorflow.lite.Interpreter
 import java.io.FileInputStream
@@ -90,6 +91,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        // アプリが閉じる際にInterpreterをクローズする
+        interpreter.close()
+        super.onDestroy()
     }
 
     // Assetsフォルダ内にあるモデル、ラベルの名称
@@ -144,18 +151,17 @@ class MainActivity : ComponentActivity() {
         return Offset(x = 0f, y = top)
     }
 
-    private fun segment(bitmap: Bitmap) : Bitmap{
+    private fun segment(bitmap: Bitmap) : Mat{
         val seg = Segmantation(interpreter)
         return seg.segment(bitmap)
     }
 
     private fun mainProcess(bitmap: Bitmap): Array<Double> {
-        // セグメンテーション
-        val maskBitmap = segment(bitmap)
+        // 入力画像: マスク部分だけ切り出した画像
+        val srcMat = segment(bitmap)
 
-        // Bitmap -> Mat
-        val srcMat= Mat()       // RGBA
-        Utils.bitmapToMat(maskBitmap, srcMat)
+        // デバッグ：画像確認用
+         // conformImage(srcMat)
 
         // 輪郭
         val contours = getContours(srcMat)
@@ -180,12 +186,12 @@ class MainActivity : ComponentActivity() {
         // 繋   不要かもしれない
 
         // とも
-//        val hindlimbLength = getHindlimb(torsoPosX, bboxPosition, contourVertex, lastToesPosX, srcMat)
-//        Log.d("HorseInfo", "ともの長さ: $hindlimbLength")
+        val hindLimbLength = getHindlimb(torsoPosX, bboxPosition, contourVertex, lastToesPosX, srcMat).toDouble()
+        Log.d("HorseInfo", "ともの長さ: $hindLimbLength")
 
         srcMat.release()
 
-        return arrayOf(witherLength, torsoLength, neckLength)
+        return arrayOf(witherLength, torsoLength, neckLength, hindLimbLength)
     }
 
     @Composable
@@ -194,9 +200,10 @@ class MainActivity : ComponentActivity() {
         var imageUri by remember { mutableStateOf<Uri?>(null) }
 
         // 馬情報
-        var witherLength by remember { mutableStateOf(0.0) }
-        var torsoLength by remember { mutableStateOf(0.0) }
-        var neckLength by remember { mutableStateOf(0.0) }
+        var witherLength by remember { mutableStateOf(0.0) }        // キ甲の長さ: 623
+        var torsoLength by remember { mutableStateOf(0.0) }         // 胴の長さ: 351
+        var neckLength by remember { mutableStateOf(0.0) }          // 首の長さ: 303.7
+        var hindLimbLength by remember {mutableStateOf(0.0)}        // ともの長さ: 178
 
         // ギャラリーから画像を選択するためのアクティビティ結果コントラクトを宣言
         val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
@@ -205,6 +212,12 @@ class MainActivity : ComponentActivity() {
 
         // 非同期処理の結果をUIに反映する
         LaunchedEffect(imageUri) {
+            if (imageUri == null) {
+                witherLength = 0.0
+                torsoLength = 0.0
+                neckLength = 0.0
+                hindLimbLength = 0.0
+            }
             imageUri?.let { uri ->
                 // uriをBitmapに変換
                 var bitmap = uri2bitmap(uri, context)
@@ -221,6 +234,7 @@ class MainActivity : ComponentActivity() {
                     witherLength = output[0]
                     torsoLength = output[1]
                     neckLength = output[2]
+                    hindLimbLength = output[3]
                 }
             }
         }
@@ -241,7 +255,6 @@ class MainActivity : ComponentActivity() {
                     // リサイズ
                     bitmap = resizedBitmap(bitmap)
 
-                    // 描画
                     val imageBitmap = bitmap.asImageBitmap()
                     drawImage(imageBitmap, topLeft = calcCanvasCenter(size.height))
                 }
@@ -258,6 +271,7 @@ class MainActivity : ComponentActivity() {
             Text("キ甲： $witherLength")
             Text("胴： $torsoLength")
             Text("首： $neckLength")
+            Text("とも： $hindLimbLength")
         }
     }
 }

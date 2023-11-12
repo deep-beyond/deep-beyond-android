@@ -6,6 +6,8 @@ package com.example.deepbeyond
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import org.opencv.android.Utils
+import org.opencv.core.Mat
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.ops.NormalizeOp
@@ -61,7 +63,7 @@ class Segmantation(
             .build()
     }
 
-    fun segment(targetBitmap: Bitmap): Bitmap{
+    fun segment(targetBitmap: Bitmap): Mat{
         // Bitmap -> TensorFlowBuffer
         tfImageBuffer.load(targetBitmap)
 
@@ -75,10 +77,23 @@ class Segmantation(
 
         // 推論実行
         interpreter.run(inputBuf, outputBuf)
-        interpreter.close()
+        // interpreter.close()
 
         // 描画
-        return draw(outputBuf, targetBitmap.width, targetBitmap.height)
+        val maskBitmap = draw(outputBuf, targetBitmap.width, targetBitmap.height)
+
+        // 入力画像を切り抜き        // 入力画像にマスク部分だけ切り出し
+        val rawMat = Mat()
+        val maskMat= Mat()
+        val srcMat = Mat()
+        Utils.bitmapToMat(targetBitmap, rawMat)
+        Utils.bitmapToMat(maskBitmap, maskMat)
+        rawMat.copyTo(srcMat, maskMat)
+
+        rawMat.release()
+        maskMat.release()
+
+        return srcMat
     }
 
     fun draw(resultBuf: ByteBuffer, w: Int, h: Int) : Bitmap {

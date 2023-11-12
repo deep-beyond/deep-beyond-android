@@ -3,16 +3,19 @@ package com.example.deepbeyond
 import android.graphics.Bitmap
 import android.util.Log
 import org.opencv.android.Utils
+import org.opencv.core.Core
 import org.opencv.core.CvType
 import org.opencv.core.Mat
+import org.opencv.core.MatOfFloat4
 import org.opencv.core.MatOfPoint
 import org.opencv.core.MatOfPoint2f
 import org.opencv.core.Point
 import org.opencv.core.Rect
 import org.opencv.core.Scalar
 import org.opencv.core.Size
-import org.opencv.core.Core
 import org.opencv.imgproc.Imgproc
+import java.lang.Math.round
+
 
 // 輪郭抽出関数
 fun getContours(srcMat: Mat): List<MatOfPoint> {
@@ -45,8 +48,8 @@ fun getContourVertex(contours: List<MatOfPoint>, srcMat: Mat):
     val contourVertex = mutableListOf<Pair<Double, Double>>()
 
     // 画像の高さ, 幅
-    val h = srcMat.rows()
-    val w = srcMat.cols()
+    val w = srcMat.rows()
+    val h = srcMat.cols()
 
     val scale = 0.6         // ノイズ除去のためのスケール比
     var conditionBboxX = 0  // 条件を満たす外接矩形のx座標
@@ -296,7 +299,15 @@ fun getNeck(contourVertex:MutableList<Pair<Double, Double>>, witherPos: Array<Ar
     val deltaY = Math.abs(end.second - start.second)
     val neckLength = Math.sqrt((deltaX * deltaX + deltaY * deltaY))
 
-    return (Math.round(neckLength * 10.0)).toDouble() / 10.0    // 小数点第1位
+    return (round(neckLength * 10.0)).toDouble() / 10.0    // 小数点第1位
+}
+
+// 出力された画像を確認する関数
+fun conformImage(src:Mat){
+    // 確認方法: https://qiita.com/futabooo/items/a986a4d2bfafd97d86b8
+    val bitmap = Bitmap.createBitmap(src.cols(), src.rows(), Bitmap.Config.ARGB_8888)
+    Utils.matToBitmap(src, bitmap)
+    print(bitmap)
 }
 
 // 尻のx座標を探索
@@ -304,12 +315,14 @@ fun getHip(torsoPosX: Int, bboxPosition: Rect, img: Mat): Int {
     //
     // 1. 探索範囲を設定
     //
+    val bboxX = bboxPosition.x
     val bboxY = bboxPosition.y
     val bboxH = bboxPosition.height
     val bboxW = bboxPosition.width
 
     // 画像の尻部分のみ着目
-    val baseImg = Mat(img, Rect(torsoPosX, bboxY, bboxW, bboxH / 2))
+    val roi = Rect(torsoPosX,bboxY, bboxX+bboxW - torsoPosX, bboxY+bboxH/2)
+    val baseImg = Mat(img, roi)
     val h = baseImg.rows()
     val w = baseImg.cols()
 
@@ -320,53 +333,62 @@ fun getHip(torsoPosX: Int, bboxPosition: Rect, img: Mat): Int {
 
     // 画像の大きさによってノイズ除去の度合を変更
     val ksize: Int
+    val bold: Int
     if (img.cols() < 150) {
+        bold = 15
         ksize = 3
     } else {
+        bold = 20
         ksize = 5
     }
 
-    //
-    //  以下, 非修正
-    //
-
     for (itr in 1..3) {
         for (alpha in listOf(1.5, 2.5, 4.5)) {
+
+            // コントラスト調整
             val adjustedImg = Mat()
             Core.convertScaleAbs(baseImg, adjustedImg, alpha)
+
+            // グレースケール化
             Imgproc.cvtColor(adjustedImg, adjustedImg, Imgproc.COLOR_BGR2GRAY)
 
+            // 輪郭抽出
             val contours = mutableListOf<MatOfPoint>()
-            val hierarchy = Mat()
-            Imgproc.findContours(adjustedImg, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+            Imgproc.findContours(adjustedImg, contours, Mat(),
+                Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
 
             // 二値化
-            val adaptiveThresholdImg = Mat()
-            Imgproc.adaptiveThreshold(adjustedImg, adaptiveThresholdImg, 255.0, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY, 13, 20.0)
+            Imgproc.adaptiveThreshold(adjustedImg, adjustedImg, 250.0,
+                Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY, 13, 20.0)
+            conformImage(adjustedImg)
 
-            // lsdのための画像作成
-            val lsdImg = Mat.zeros(adaptiveThresholdImg.size(), CvType.CV_8UC1)
+            // 直線検出
+            val detector = Imgproc.createLineSegmentDetector()
+            val lines = MatOfFloat4()
+            detector.detect(adjustedImg, lines)
 
-            val tmp = Mat()
+            // 検出された直線を描画       drawSegment関数は色を指定できないようで以下のプログラムによって描画
+            val lineArray = lines.toArray()
+            val cnt: Int = lineArray.size / 4
+            val lsdImg = Mat.zeros(adjustedImg.size(), CvType.CV_8UC1)
+            for (i in 0 until cnt) {
+                val x1 = round(lineArray.get(i * 4))
+                val y1 = round(lineArray.get(i * 4 + 1))
+                val x2 = round(lineArray.get(i * 4 + 2))
+                val y2 = round(lineArray.get(i * 4 + 3))
+                Imgproc.line(lsdImg, Point(x1.toDouble(), y1.toDouble()), Point(x2.toDouble(), y2.toDouble()), Scalar(255.0), 1)
+            }
+            Core.bitwise_not(lsdImg, lsdImg)    // ネガポジ反転
+            // conformImage(lsdImg)
 
-            Imgproc.createLineSegmentDetector().detect(adaptiveThresholdImg, tmp)
-
-
-//            for (line in Imgproc.createLineSegmentDetector().detect(adaptiveThresholdImg)) {
-//                val x1 = line[0].toInt()
-//                val y1 = line[1].toInt()
-//                val x2 = line[2].toInt()
-//                val y2 = line[3].toInt()
-//                Imgproc.line(lsdImg, Point(x1.toDouble(), y1.toDouble()), Point(x2.toDouble(), y2.toDouble()), Scalar(255.0), 1)
-//            }
-
-
-            Core.bitwise_not(lsdImg, lsdImg)
-
+            // 線の太さを変更
             Core.bitwise_not(lsdImg, lsdImg)
             val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(3.0, 3.0))
             Imgproc.dilate(lsdImg, lsdImg, kernel, Point(-1.0, -1.0), itr)
             Core.bitwise_not(lsdImg, lsdImg)
+
+            // デバッグ　画像確認用
+            // conformImage(lsdImg)
 
             var bottomRightXPos = 0
             for (x in w - 1 downTo 0) {
@@ -376,6 +398,7 @@ fun getHip(torsoPosX: Int, bboxPosition: Rect, img: Mat): Int {
                 }
             }
 
+            // 画像内の最も右下にある黒色ピクセルを探索
             val contour = MatOfPoint()
             var drawFlag = false
             for (point in contours[0].toList()) {
@@ -389,16 +412,21 @@ fun getHip(torsoPosX: Int, bboxPosition: Rect, img: Mat): Int {
                 }
             }
 
-//            for (i in 0 until contour.size() - 1) {
-//                val x1 = contours[i].get(0,0)[0]
-//                val y1 = contours[i].get(0,0)[1]
-//                val x2 = contours[i + 1].get(0,0)[0]
-//                val y2 = contours[i + 1].get(0,0)[1]
-//
-//            }
+            // 馬の尾から背中にかけての輪郭を白色にする(線を除去)
+            val contourArray = contour.toArray()
+            for (i in 0 until contourArray.size - 1) {
+                val x1 = contourArray.get(i).x
+                val y1 = contourArray.get(i).y
+                val x2 = contourArray.get(i + 1).x
+                val y2 = contourArray.get(i + 1).y
+                Imgproc.line(lsdImg, Point(x1 ,y1), Point(x2, y2), Scalar(255.0), bold)
+            }
 
+             conformImage(lsdImg)
+
+            // ノイズ除去
             for (j in 0 until 4) {
-                Imgproc.medianBlur(adjustedImg, adjustedImg, ksize)
+                Imgproc.medianBlur(lsdImg, lsdImg, ksize)
             }
 
             val candPosXS = mutableListOf<Int>()
@@ -480,5 +508,9 @@ fun getHindlimb(torsoPosX: Int, bboxPosition:Rect,
         }
     }
 
-    return hipPosX - hindlimbPosX
+    var hindLimbLength = hipPosX - hindlimbPosX
+    if (hindLimbLength < 0){
+        hindLimbLength = 0 - hindLimbLength
+    }
+    return hindLimbLength
 }
