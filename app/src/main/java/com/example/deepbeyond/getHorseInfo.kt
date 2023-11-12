@@ -1,5 +1,6 @@
 package com.example.deepbeyond
 
+import android.R.id.input
 import android.graphics.Bitmap
 import android.util.Log
 import org.opencv.android.Utils
@@ -323,8 +324,11 @@ fun getHip(torsoPosX: Int, bboxPosition: Rect, img: Mat): Int {
     // 画像の尻部分のみ着目
     val roi = Rect(torsoPosX,bboxY, bboxX+bboxW - torsoPosX, bboxY+bboxH/2)
     val baseImg = Mat(img, roi)
-    val h = baseImg.rows()
-    val w = baseImg.cols()
+
+    // 画像を拡大
+    val baseImg2 = Mat()
+    Imgproc.resize(baseImg, baseImg2, Size(baseImg.size().width * 2, baseImg.size().height * 2))
+
 
     //
     // 2. 尻の先端のx座標を探索
@@ -342,12 +346,14 @@ fun getHip(torsoPosX: Int, bboxPosition: Rect, img: Mat): Int {
         ksize = 5
     }
 
+    val h = baseImg2.rows()
+    val w = baseImg2.cols()
     for (itr in 1..3) {
         for (alpha in listOf(1.5, 2.5, 4.5)) {
 
             // コントラスト調整
             val adjustedImg = Mat()
-            Core.convertScaleAbs(baseImg, adjustedImg, alpha)
+            Core.convertScaleAbs(baseImg2, adjustedImg, alpha)
 
             // グレースケール化
             Imgproc.cvtColor(adjustedImg, adjustedImg, Imgproc.COLOR_BGR2GRAY)
@@ -379,7 +385,7 @@ fun getHip(torsoPosX: Int, bboxPosition: Rect, img: Mat): Int {
                 Imgproc.line(lsdImg, Point(x1.toDouble(), y1.toDouble()), Point(x2.toDouble(), y2.toDouble()), Scalar(255.0), 1)
             }
             Core.bitwise_not(lsdImg, lsdImg)    // ネガポジ反転
-            // conformImage(lsdImg)
+            conformImage(lsdImg)
 
             // 線の太さを変更
             Core.bitwise_not(lsdImg, lsdImg)
@@ -388,7 +394,7 @@ fun getHip(torsoPosX: Int, bboxPosition: Rect, img: Mat): Int {
             Core.bitwise_not(lsdImg, lsdImg)
 
             // デバッグ　画像確認用
-            // conformImage(lsdImg)
+            conformImage(lsdImg)
 
             var bottomRightXPos = 0
             for (x in w - 1 downTo 0) {
@@ -508,9 +514,5 @@ fun getHindlimb(torsoPosX: Int, bboxPosition:Rect,
         }
     }
 
-    var hindLimbLength = hipPosX - hindlimbPosX
-    if (hindLimbLength < 0){
-        hindLimbLength = 0 - hindLimbLength
-    }
-    return hindLimbLength
+    return (hipPosX - hindlimbPosX) / 2     // 画像サイズを2倍したのを戻す
 }
